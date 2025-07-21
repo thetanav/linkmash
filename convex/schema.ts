@@ -1,6 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { authTables } from "@convex-dev/auth/server";
 
 const applicationTables = {
   profiles: defineTable({
@@ -34,11 +33,9 @@ const applicationTables = {
     profile2Id: v.id("profiles"),
     category: v.string(),
     active: v.boolean(),
-  })
-    .index("by_category_active", ["category", "active"]),
+  }).index("by_category_active", ["category", "active"]),
 };
 
 export default defineSchema({
-  ...authTables,
   ...applicationTables,
 });
