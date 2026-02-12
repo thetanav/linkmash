@@ -8,17 +8,6 @@ function extractLinkedInUsername(url: string): string {
   return match ? match[1] : "";
 }
 
-// Generate a profile image URL from the LinkedIn username using unavatar.io
-function getProfileImageUrl(
-  linkedinUrl: string,
-  customImageUrl?: string,
-): string {
-  if (customImageUrl) return customImageUrl;
-  const username = extractLinkedInUsername(linkedinUrl);
-  if (!username) return "";
-  return `https://unavatar.io/linkedin/${username}`;
-}
-
 export const submitProfile = mutation({
   args: {
     linkedinUrl: v.string(),
@@ -104,10 +93,6 @@ export const getRandomMatchup = mutation({
     const addProfileData = (profile: (typeof profiles)[0]) => ({
       ...profile,
       username: extractLinkedInUsername(profile.linkedinUrl),
-      resolvedImageUrl: getProfileImageUrl(
-        profile.linkedinUrl,
-        profile.imageUrl,
-      ),
     });
 
     return {
@@ -257,10 +242,6 @@ export const getLeaderboard = query({
     return profiles.map((profile) => ({
       ...profile,
       username: extractLinkedInUsername(profile.linkedinUrl),
-      resolvedImageUrl: getProfileImageUrl(
-        profile.linkedinUrl,
-        profile.imageUrl,
-      ),
     }));
   },
 });
@@ -295,11 +276,37 @@ export const getProfileStats = query({
       winRate: Math.round(winRate),
       rank: higherScored.length + 1,
       username: extractLinkedInUsername(profile.linkedinUrl),
-      resolvedImageUrl: getProfileImageUrl(
-        profile.linkedinUrl,
-        profile.imageUrl,
-      ),
     };
+  },
+});
+
+// Search profiles by name
+export const searchProfiles = query({
+  args: {
+    query: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    const searchQuery = args.query.toLowerCase().trim();
+
+    if (!searchQuery) {
+      return [];
+    }
+
+    const profiles = await ctx.db
+      .query("profiles")
+      .filter((q) => q.eq(q.field("approved"), true))
+      .collect();
+
+    const filtered = profiles
+      .filter((profile) => profile.name.toLowerCase().includes(searchQuery))
+      .slice(0, limit);
+
+    return filtered.map((profile) => ({
+      ...profile,
+      username: extractLinkedInUsername(profile.linkedinUrl),
+    }));
   },
 });
 
