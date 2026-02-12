@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
+import { Link } from "react-router-dom";
+import { ProfileImage } from "./ProfileImage";
 
 const CATEGORIES = [
   { value: "all", label: "All" },
@@ -13,68 +15,13 @@ const CATEGORIES = [
   { value: "other", label: "Other" },
 ];
 
-function ProfileImage({
-  profile,
-  size = "small",
-}: {
-  profile: any;
-  size?: "small" | "medium";
-}) {
-  const [imageError, setImageError] = useState(false);
-  const getInitials = (name: string) =>
-    name
-      .split(" ")
-      .map((word) => word[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  const px = size === "small" ? 24 : 36;
-  const fontSize = size === "small" ? 12 : 15;
-  if (imageError || !profile.imageUrl) {
-    return (
-      <div
-        style={{
-          width: px,
-          height: px,
-          background: "#ccc",
-          border: "1px solid #888",
-          textAlign: "center",
-          lineHeight: px + "px",
-          fontWeight: "bold",
-          fontSize,
-          borderRadius: 0,
-        }}
-      >
-        {getInitials(profile.name)}
-      </div>
-    );
-  }
-  return (
-    <div
-      style={{
-        width: px,
-        height: px,
-        overflow: "hidden",
-        border: "1px solid #888",
-        borderRadius: 0,
-      }}
-    >
-      <img
-        src={profile.imageUrl}
-        alt={profile.name}
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        onError={() => setImageError(true)}
-      />
-    </div>
-  );
-}
-
 export function Leaderboard() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const leaderboard = useQuery(api.profiles.getLeaderboard, {
     category: selectedCategory === "all" ? undefined : selectedCategory,
     limit: 20,
   });
+
   if (!leaderboard) {
     return (
       <div style={{ textAlign: "center", padding: 32 }}>
@@ -82,6 +29,7 @@ export function Leaderboard() {
       </div>
     );
   }
+
   return (
     <div>
       <div style={{ textAlign: "center", marginBottom: 10 }}>
@@ -127,6 +75,7 @@ export function Leaderboard() {
           ))}
         </div>
       </div>
+
       <div
         style={{
           background: "#fff",
@@ -173,7 +122,7 @@ export function Leaderboard() {
                   textAlign: "left",
                 }}
               >
-                Hireablity Score
+                Hireability Score
               </th>
               <th
                 style={{
@@ -200,7 +149,7 @@ export function Leaderboard() {
                   textAlign: "left",
                 }}
               >
-                LinkedIn
+                Profile
               </th>
             </tr>
           </thead>
@@ -234,17 +183,30 @@ export function Leaderboard() {
                     }}
                   >
                     {index + 1}
-                    {index === 0 && "🥇"}
-                    {index === 1 && "🥈"}
-                    {index === 2 && "🥉"}
+                    {index === 0 && " [1st]"}
+                    {index === 1 && " [2nd]"}
+                    {index === 2 && " [3rd]"}
                   </td>
                   <td style={{ border: "1px solid #888", padding: 6 }}>
                     <div
-                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
                     >
                       <ProfileImage profile={profile} size="small" />
                       <div>
-                        <div style={{ fontWeight: "bold" }}>{profile.name}</div>
+                        <Link
+                          to={`/profile/${profile._id}`}
+                          style={{
+                            fontWeight: "bold",
+                            color: "#003399",
+                            textDecoration: "none",
+                          }}
+                        >
+                          {profile.name}
+                        </Link>
                         <div style={{ fontSize: 11, color: "#666" }}>
                           {profile.title}
                         </div>
@@ -291,8 +253,19 @@ export function Leaderboard() {
                         textDecoration: "underline",
                       }}
                     >
-                      View →
+                      LinkedIn
                     </a>
+                    {" | "}
+                    <Link
+                      to={`/profile/${profile._id}`}
+                      style={{
+                        color: "#003399",
+                        fontSize: 12,
+                        textDecoration: "underline",
+                      }}
+                    >
+                      Share
+                    </Link>
                   </td>
                 </tr>
               );
@@ -302,7 +275,10 @@ export function Leaderboard() {
         {leaderboard.length === 0 && (
           <div style={{ textAlign: "center", padding: 24 }}>
             <span style={{ color: "#888", fontSize: 13 }}>
-              No profiles found.
+              No profiles found.{" "}
+              <Link to="/submit" style={{ color: "#003399" }}>
+                Submit one!
+              </Link>
             </span>
           </div>
         )}
