@@ -8,6 +8,68 @@ function extractLinkedInUsername(url: string): string {
   return match ? match[1] : "";
 }
 
+// Validation helpers
+const validators = {
+  linkedinUrl: (url: string): string | null => {
+    if (!url || !url.trim()) return "LinkedIn URL is required";
+    const regex = /^https?:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+\/?$/i;
+    if (!regex.test(url.trim())) {
+      return "Please provide a valid LinkedIn profile URL (e.g., https://linkedin.com/in/username)";
+    }
+    return null;
+  },
+
+  name: (name: string): string | null => {
+    if (!name || !name.trim()) return "Name is required";
+    if (name.trim().length < 2)
+      return "Name must be at least 2 characters long";
+    if (name.trim().length > 100)
+      return "Name must be less than 100 characters";
+    return null;
+  },
+
+  title: (title: string): string | null => {
+    if (!title || !title.trim()) return "Job title is required";
+    if (title.trim().length < 2)
+      return "Job title must be at least 2 characters long";
+    if (title.trim().length > 150)
+      return "Job title must be less than 150 characters";
+    return null;
+  },
+
+  category: (category: string): string | null => {
+    const validCategories = [
+      "developer",
+      "founder",
+      "designer",
+      "pm",
+      "marketing",
+      "sales",
+      "other",
+    ];
+    if (!category || !validCategories.includes(category)) {
+      return "Please select a valid category";
+    }
+    return null;
+  },
+
+  bio: (bio: string | undefined): string | null => {
+    if (bio && bio.length > 200) {
+      return "Bio must be less than 200 characters";
+    }
+    return null;
+  },
+
+  imageUrl: (url: string | undefined): string | null => {
+    if (!url) return null; // Optional
+    const regex = /^https?:\/\/.+/i;
+    if (!regex.test(url.trim())) {
+      return "Image URL must start with http:// or https://";
+    }
+    return null;
+  },
+};
+
 export const submitProfile = mutation({
   args: {
     linkedinUrl: v.string(),
@@ -20,40 +82,70 @@ export const submitProfile = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
 
-    // Validate LinkedIn URL
-    if (!args.linkedinUrl.includes("linkedin.com/in/")) {
-      throw new Error("Please provide a valid LinkedIn profile URL");
+    // Validate all fields
+    const errors: Record<string, string> = {};
+
+    const linkedinError = validators.linkedinUrl(args.linkedinUrl);
+    if (linkedinError) errors.linkedinUrl = linkedinError;
+
+    const nameError = validators.name(args.name);
+    if (nameError) errors.name = nameError;
+
+    const titleError = validators.title(args.title);
+    if (titleError) errors.title = titleError;
+
+    const categoryError = validators.category(args.category);
+    if (categoryError) errors.category = categoryError;
+
+    const bioError = validators.bio(args.bio);
+    if (bioError) errors.bio = bioError;
+
+    const imageUrlError = validators.imageUrl(args.imageUrl);
+    if (imageUrlError) errors.imageUrl = imageUrlError;
+
+    // If there are validation errors, return them
+    if (Object.keys(errors).length > 0) {
+      const firstError = Object.values(errors)[0];
+      throw new Error(firstError);
     }
 
     // Normalize LinkedIn URL (remove trailing slashes, query params)
-    const normalizedUrl = args.linkedinUrl.split("?")[0].replace(/\/+$/, "");
+    const normalizedUrl = args.linkedinUrl
+      .trim()
+      .split("?")[0]
+      .replace(/\/+$/, "");
 
-    // Check if profile already exists -- return existing profile ID instead of error
+    // Check if profile already exists
     const existing = await ctx.db
       .query("profiles")
-      .filter((q) => q.eq(q.field("linkedinUrl"), normalizedUrl))
+      .withIndex("by_linkedinUrl", (q) => q.eq("linkedinUrl", normalizedUrl))
       .first();
 
     if (existing) {
       return { profileId: existing._id, alreadyExists: true };
     }
 
-    const profileId = await ctx.db.insert("profiles", {
-      linkedinUrl: normalizedUrl,
-      name: args.name,
-      title: args.title,
-      category: args.category,
-      bio: args.bio || undefined,
-      imageUrl: args.imageUrl || undefined,
-      submittedBy: userId || undefined,
-      approved: true,
-      score: 1000,
-      totalVotes: 0,
-      wins: 0,
-      losses: 0,
-    });
+    try {
+      const profileId = await ctx.db.insert("profiles", {
+        linkedinUrl: normalizedUrl,
+        name: args.name.trim(),
+        title: args.title.trim(),
+        category: args.category,
+        bio: args.bio?.trim() || undefined,
+        imageUrl: args.imageUrl?.trim() || undefined,
+        submittedBy: userId || undefined,
+        approved: true,
+        score: 1000,
+        totalVotes: 0,
+        wins: 0,
+        losses: 0,
+      });
 
-    return { profileId, alreadyExists: false };
+      return { profileId, alreadyExists: false };
+    } catch (error) {
+      console.error("Failed to insert profile:", error);
+      throw new Error("Failed to create profile. Please try again later.");
+    }
   },
 });
 
@@ -122,7 +214,7 @@ export const submitVote = mutation({
         .collect();
 
       if (recentVotes.length >= 60) {
-        throw new Error("You're voting too fast! Slow down a bit.");
+        throw new Error("You're voting too fast! Please slow down a bit.");
       }
     }
 
@@ -131,7 +223,7 @@ export const submitVote = mutation({
     const loser = await ctx.db.get(args.loserProfileId);
 
     if (!winner || !loser) {
-      throw new Error("Invalid profiles");
+      throw new Error("One or both profiles no longer exist.");
     }
 
     // Calculate new ELO scores
